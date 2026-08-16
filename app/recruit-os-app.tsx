@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type View = "overview" | "roles" | "talent" | "campaigns" | "candidate" | "attendance";
 type CampaignState = "NOT_STARTED" | "INITIATED" | "RINGING" | "IN_PROGRESS" | "COMPLETED";
+type HunarConnection = { connected: boolean; agent?: { name?: string; status?: string; code?: string } };
 
 const navItems: { id: View; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "⌂" },
@@ -103,6 +104,7 @@ export function RecruitOSApp() {
   const [notice, setNotice] = useState("");
   const [roleSaved, setRoleSaved] = useState(true);
   const [attendanceLayer, setAttendanceLayer] = useState<"capture" | "verify" | "reconcile">("capture");
+  const [hunarConnection, setHunarConnection] = useState<HunarConnection | null>(null);
   const campaignTimers = useRef<number[]>([]);
   const storageReady = useRef(false);
 
@@ -131,6 +133,15 @@ export function RecruitOSApp() {
       window.removeEventListener("popstate", handleHistory);
       campaignTimers.current.forEach(window.clearTimeout);
     };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/hunar/status", { signal: controller.signal, cache: "no-store" })
+      .then(async (response) => response.json() as Promise<HunarConnection>)
+      .then(setHunarConnection)
+      .catch(() => setHunarConnection({ connected: false }));
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -228,8 +239,8 @@ export function RecruitOSApp() {
           <div className="integration-card">
             <span className="pulse-dot" />
             <div>
-              <strong>Demo providers active</strong>
-              <small>Hunar + Apollo adapters ready</small>
+              <strong>{hunarConnection?.connected ? "Hunar API verified" : "Demo providers active"}</strong>
+              <small>{hunarConnection?.connected ? `${hunarConnection.agent?.name ?? "Screening agent"} · ${hunarConnection.agent?.status ?? "ACTIVE"}` : "Hunar + Apollo adapters ready"}</small>
             </div>
           </div>
           <div className="profile-row">
