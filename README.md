@@ -6,6 +6,8 @@ Hunar RecruitOS is a focused recruiting workspace for the Hunar.ai take-home ass
 
 The deployed frontend is deliberately resilient: **Demo mode** exercises the complete reviewer journey without calling real people. A server-only health endpoint verifies the supplied Hunar credential and active candidate-screening agent at runtime; demo candidates, calls, transcripts, and results remain visibly labelled.
 
+An explicitly consented live-call QA run also completed successfully on 16 August 2026: one call, automatic retries disabled, `RINGING → IN_PROGRESS → COMPLETED`, 106 seconds, with structured screening results returned. The protected test route was disabled and its one-time token removed immediately afterward; the public walkthrough remains in safe demo mode.
+
 ## Core journey
 
 ```mermaid
