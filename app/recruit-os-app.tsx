@@ -1,10 +1,24 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 type View = "overview" | "roles" | "talent" | "campaigns" | "candidate" | "attendance";
 type CampaignState = "NOT_STARTED" | "INITIATED" | "RINGING" | "IN_PROGRESS" | "COMPLETED";
 type HunarConnection = { connected: boolean; agent?: { name?: string; status?: string; code?: string } };
+type RoleDraft = {
+  title: string;
+  location: string;
+  experience: string;
+  description: string;
+};
+
+const defaultRole: RoleDraft = {
+  title: "Customer Success Manager",
+  location: "Bengaluru, India",
+  experience: "5–8 years",
+  description: "Own a portfolio of enterprise customers, drive onboarding and adoption, identify churn risk, and partner with sales and product to deliver measurable customer outcomes.",
+};
 
 const navItems: { id: View; label: string; icon: string }[] = [
   { id: "overview", label: "Overview", icon: "⌂" },
@@ -103,6 +117,7 @@ export function RecruitOSApp() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [notice, setNotice] = useState("");
   const [roleSaved, setRoleSaved] = useState(true);
+  const [role, setRole] = useState<RoleDraft>(defaultRole);
   const [attendanceLayer, setAttendanceLayer] = useState<"capture" | "verify" | "reconcile">("capture");
   const [hunarConnection, setHunarConnection] = useState<HunarConnection | null>(null);
   const campaignTimers = useRef<number[]>([]);
@@ -115,12 +130,16 @@ export function RecruitOSApp() {
       const savedShortlist = window.localStorage.getItem("recruitos-shortlist");
       const savedCandidate = Number(window.localStorage.getItem("recruitos-selected-candidate"));
       const savedCampaign = window.localStorage.getItem("recruitos-campaign-state") as CampaignState | null;
+      const savedRole = window.localStorage.getItem("recruitos-role");
       storageReady.current = true;
       if (savedShortlist) {
         try { setShortlisted(JSON.parse(savedShortlist)); } catch { window.localStorage.removeItem("recruitos-shortlist"); }
       }
       if (candidates.some((candidate) => candidate.id === savedCandidate)) setSelectedCandidateId(savedCandidate);
       if (savedCampaign && ["NOT_STARTED", "INITIATED", "RINGING", "IN_PROGRESS", "COMPLETED"].includes(savedCampaign)) setCampaignState(savedCampaign);
+      if (savedRole) {
+        try { setRole({ ...defaultRole, ...JSON.parse(savedRole) as Partial<RoleDraft> }); } catch { window.localStorage.removeItem("recruitos-role"); }
+      }
     }, 0);
 
     const handleHistory = () => {
@@ -161,14 +180,14 @@ export function RecruitOSApp() {
   const pageTitle = useMemo(() => {
     const names: Record<View, [string, string]> = {
       overview: ["Good evening, Vardan", "Here’s what’s moving across your hiring pipeline."],
-      roles: ["Customer Success Manager", "Role setup, screening plan, and pipeline activity."],
+      roles: [role.title, "Role setup, screening plan, and pipeline activity."],
       talent: ["Talent search", "Find people who match the role, then bring the best into your pipeline."],
       campaigns: ["Voice campaigns", "Review, launch, and track candidate conversations."],
       candidate: ["Candidate review", "One profile, every hiring signal, ready for human judgment."],
       attendance: ["Attendance without smartphones", "A practical operating blueprint for 1,000 people across 100 sites."],
     };
     return names[view];
-  }, [view]);
+  }, [role.title, view]);
 
   function navigate(next: View) {
     setView(next);
@@ -259,8 +278,8 @@ export function RecruitOSApp() {
           <div className="breadcrumb"><span>RecruitOS</span><b>/</b>{pageTitle[0]}</div>
           <div className="top-actions">
             <DemoPill />
-            <button className="icon-button" aria-label="Search">⌕</button>
-            <button className="icon-button has-alert" aria-label="Notifications">♢</button>
+            <button className="icon-button" aria-label="Search" onClick={() => navigate("talent")}>⌕</button>
+            <button className="icon-button has-alert" aria-label="Notifications" onClick={() => setNotice("No unread production notifications in demo mode")}>♢</button>
           </div>
         </header>
 
@@ -271,7 +290,7 @@ export function RecruitOSApp() {
               <p>{pageTitle[1]}</p>
             </div>
             {view === "overview" && (
-              <button className="primary-button" onClick={() => navigate("roles")}><span>＋</span> Create role</button>
+              <Button onClick={() => navigate("roles")}><span>＋</span> Create role</Button>
             )}
             {view === "talent" && (
               <button className="secondary-button" onClick={() => setShortlisted([])}>Clear shortlist</button>
@@ -280,7 +299,7 @@ export function RecruitOSApp() {
 
           {view === "overview" && <Overview onNavigate={navigate} />}
           {view === "roles" && (
-            <Roles roleSaved={roleSaved} setRoleSaved={setRoleSaved} onNavigate={navigate} setNotice={setNotice} />
+            <Roles role={role} setRole={setRole} roleSaved={roleSaved} setRoleSaved={setRoleSaved} onNavigate={navigate} setNotice={setNotice} />
           )}
           {view === "talent" && (
             <TalentSearch
@@ -291,12 +310,13 @@ export function RecruitOSApp() {
               onToggle={toggleShortlist}
               onCandidate={openCandidate}
               onCampaign={() => navigate("campaigns")}
+              role={role}
             />
           )}
           {view === "campaigns" && (
-            <Campaigns campaignState={campaignState} onLaunch={() => setShowConfirm(true)} onCandidate={() => openCandidate(1)} />
+            <Campaigns campaignState={campaignState} shortlisted={shortlisted} onLaunch={() => setShowConfirm(true)} onCandidate={openCandidate} role={role} />
           )}
-          {view === "candidate" && <CandidateDetail candidateId={selectedCandidateId} setNotice={setNotice} />}
+          {view === "candidate" && <CandidateDetail key={selectedCandidateId} candidateId={selectedCandidateId} setNotice={setNotice} />}
           {view === "attendance" && (
             <AttendanceBlueprint layer={attendanceLayer} setLayer={setAttendanceLayer} />
           )}
@@ -309,15 +329,15 @@ export function RecruitOSApp() {
             <div className="modal-icon">◉</div>
             <StatusBadge tone="demo">Demo simulation</StatusBadge>
             <h2 id="confirm-title">Launch voice campaign?</h2>
-            <p>This will simulate Hunar call states for two shortlisted candidates. No phone call or paid API request will be made.</p>
+            <p>This will simulate Hunar call states for {shortlisted.length} shortlisted candidate{shortlisted.length === 1 ? "" : "s"}. No phone call or paid API request will be made.</p>
             <div className="modal-summary">
-              <div><span>Candidates</span><strong>2</strong></div>
+              <div><span>Candidates</span><strong>{shortlisted.length}</strong></div>
               <div><span>Questions</span><strong>4</strong></div>
               <div><span>Language</span><strong>English</strong></div>
             </div>
             <div className="modal-actions">
               <button className="secondary-button" onClick={() => setShowConfirm(false)}>Cancel</button>
-              <button className="primary-button" onClick={launchCampaign}>Start demo campaign</button>
+              <Button onClick={launchCampaign} disabled={shortlisted.length === 0}>Start demo campaign</Button>
             </div>
           </section>
         </div>
@@ -408,23 +428,23 @@ function Overview({ onNavigate }: { onNavigate: (view: View) => void }) {
   );
 }
 
-function Roles({ roleSaved, setRoleSaved, onNavigate, setNotice }: {
+function Roles({ role, setRole, roleSaved, setRoleSaved, onNavigate, setNotice }: {
+  role: RoleDraft;
+  setRole: React.Dispatch<React.SetStateAction<RoleDraft>>;
   roleSaved: boolean;
   setRoleSaved: (value: boolean) => void;
   onNavigate: (view: View) => void;
   setNotice: (message: string) => void;
 }) {
-  const [title, setTitle] = useState("Customer Success Manager");
-  const [location, setLocation] = useState("Bengaluru, India");
-  const [description, setDescription] = useState("Own a portfolio of enterprise customers, drive onboarding and adoption, identify churn risk, and partner with sales and product to deliver measurable customer outcomes.");
   const [formError, setFormError] = useState("");
 
   function saveRole() {
-    if (title.trim().length < 3) return setFormError("Role title must contain at least 3 characters.");
-    if (location.trim().length < 2) return setFormError("Add a valid work location.");
-    if (description.trim().length < 30) return setFormError("Job description must contain at least 30 characters.");
+    if (role.title.trim().length < 3) return setFormError("Role title must contain at least 3 characters.");
+    if (role.location.trim().length < 2) return setFormError("Add a valid work location.");
+    if (role.description.trim().length < 30) return setFormError("Job description must contain at least 30 characters.");
     setFormError("");
     setRoleSaved(true);
+    window.localStorage.setItem("recruitos-role", JSON.stringify(role));
     setNotice("Role saved");
   }
 
@@ -433,12 +453,12 @@ function Roles({ roleSaved, setRoleSaved, onNavigate, setNotice }: {
       <section className="panel role-form">
         <div className="section-kicker"><span>01</span> Role brief</div>
         {formError && <div className="form-error" role="alert"><span>!</span>{formError}</div>}
-        <label>Role title<input required minLength={3} maxLength={160} value={title} onChange={(event) => { setTitle(event.target.value); setRoleSaved(false); setFormError(""); }} /></label>
+        <label>Role title<input required minLength={3} maxLength={160} value={role.title} onChange={(event) => { setRole((current) => ({ ...current, title: event.target.value })); setRoleSaved(false); setFormError(""); }} /></label>
         <div className="field-grid">
-          <label>Location<input required minLength={2} maxLength={160} value={location} onChange={(event) => { setLocation(event.target.value); setRoleSaved(false); setFormError(""); }} /></label>
-          <label>Experience<select defaultValue="5–8 years" onChange={() => setRoleSaved(false)}><option>3–5 years</option><option>5–8 years</option><option>8–12 years</option></select></label>
+          <label>Location<input required minLength={2} maxLength={160} value={role.location} onChange={(event) => { setRole((current) => ({ ...current, location: event.target.value })); setRoleSaved(false); setFormError(""); }} /></label>
+          <label>Experience<select value={role.experience} onChange={(event) => { setRole((current) => ({ ...current, experience: event.target.value })); setRoleSaved(false); }}><option>3–5 years</option><option>5–8 years</option><option>8–12 years</option></select></label>
         </div>
-        <label>Job description<textarea required minLength={30} maxLength={8000} value={description} onChange={(event) => { setDescription(event.target.value); setRoleSaved(false); setFormError(""); }} /></label>
+        <label>Job description<textarea required minLength={30} maxLength={8000} value={role.description} onChange={(event) => { setRole((current) => ({ ...current, description: event.target.value })); setRoleSaved(false); setFormError(""); }} /></label>
         <label>Required skills<div className="tag-input"><span>B2B SaaS ×</span><span>Enterprise accounts ×</span><span>Retention ×</span><input aria-label="Add skill" placeholder="Add skill…" /></div></label>
 
         <div className="section-divider" />
@@ -453,7 +473,7 @@ function Roles({ roleSaved, setRoleSaved, onNavigate, setNotice }: {
         <div className="form-actions">
           <span>{roleSaved ? "All changes saved" : "Unsaved changes"}</span>
           <button className="secondary-button" onClick={() => onNavigate("overview")}>Cancel</button>
-          <button className="primary-button" onClick={saveRole}>Save role</button>
+          <Button onClick={saveRole}>Save role</Button>
         </div>
       </section>
 
@@ -464,7 +484,7 @@ function Roles({ roleSaved, setRoleSaved, onNavigate, setNotice }: {
           <ul><li><span>✓</span>Clear outcome ownership</li><li><span>✓</span>Searchable skills added</li><li><span>✓</span>4 structured questions</li><li className="suggestion"><span>＋</span>Add salary range</li></ul>
         </article>
         <article className="panel mini-pipeline">
-          <div className="panel-heading"><div><h2>Pipeline</h2><p>Customer Success Manager</p></div></div>
+          <div className="panel-heading"><div><h2>Pipeline</h2><p>{role.title}</p></div></div>
           <div><span>Discovered</span><b>36</b></div><div><span>Shortlisted</span><b>12</b></div><div><span>Voice screened</span><b>8</b></div><div><span>Qualified</span><b>6</b></div>
           <button className="primary-button full" onClick={() => onNavigate("talent")}>Find candidates →</button>
         </article>
@@ -473,7 +493,7 @@ function Roles({ roleSaved, setRoleSaved, onNavigate, setNotice }: {
   );
 }
 
-function TalentSearch({ searching, searched, shortlisted, onSearch, onToggle, onCandidate, onCampaign }: {
+function TalentSearch({ searching, searched, shortlisted, onSearch, onToggle, onCandidate, onCampaign, role }: {
   searching: boolean;
   searched: boolean;
   shortlisted: number[];
@@ -481,21 +501,35 @@ function TalentSearch({ searching, searched, shortlisted, onSearch, onToggle, on
   onToggle: (id: number) => void;
   onCandidate: (id: number) => void;
   onCampaign: () => void;
+  role: RoleDraft;
 }) {
+  const [titleFilter, setTitleFilter] = useState(role.title);
+  const [locationFilter, setLocationFilter] = useState(role.location);
+  const [experienceFilter, setExperienceFilter] = useState(role.experience);
+  const [keywordFilter, setKeywordFilter] = useState("B2B SaaS, Enterprise");
+  const [page, setPage] = useState(1);
+  const pageSize = 2;
+  const visibleCandidates = candidates.slice((page - 1) * pageSize, page * pageSize);
+
+  function search() {
+    setPage(1);
+    onSearch();
+  }
+
   return (
     <div className="stack-lg">
       <section className="search-builder panel">
         <div className="search-top">
-          <div><span className="eyebrow">Searching for</span><h2>Customer Success Manager</h2><p>We translated your role brief into editable search criteria.</p></div>
+          <div><span className="eyebrow">Searching for</span><h2>{role.title}</h2><p>We translated your role brief into editable search criteria.</p></div>
           <DemoPill />
         </div>
         <div className="criteria-grid">
-          <div className="filter-field"><span>Titles</span><div className="tag-input compact"><span>Customer Success Manager ×</span><span>CS Lead ×</span></div></div>
-          <div className="filter-field"><span>Location</span><div className="select-like">Bengaluru, India <b>⌄</b></div></div>
-          <div className="filter-field"><span>Experience</span><div className="select-like">5–8 years <b>⌄</b></div></div>
-          <div className="filter-field"><span>Keywords</span><div className="tag-input compact"><span>B2B SaaS ×</span><span>Enterprise ×</span></div></div>
+          <label className="filter-field"><span>Titles</span><input value={titleFilter} onChange={(event) => setTitleFilter(event.target.value)} aria-label="Search titles" /></label>
+          <label className="filter-field"><span>Location</span><input value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Search location" /></label>
+          <label className="filter-field"><span>Experience</span><select value={experienceFilter} onChange={(event) => setExperienceFilter(event.target.value)} aria-label="Search experience"><option>3–5 years</option><option>5–8 years</option><option>8–12 years</option></select></label>
+          <label className="filter-field"><span>Keywords</span><input value={keywordFilter} onChange={(event) => setKeywordFilter(event.target.value)} aria-label="Search keywords" /></label>
         </div>
-        <div className="search-actions"><small><span>ⓘ</span> Demo results use the same normalized shape as the live Apollo adapter.</small><button className="primary-button" disabled={searching} onClick={onSearch}>{searching ? "Searching…" : "⌕ Search talent"}</button></div>
+        <div className="search-actions"><small><span>ⓘ</span> Demo results use the same normalized shape as the live Apollo adapter.</small><Button disabled={searching || !titleFilter.trim()} onClick={search}>{searching ? "Searching…" : "⌕ Search talent"}</Button></div>
       </section>
 
       <div className="results-heading"><div><h2>{searching ? "Searching the demo index…" : "4 strong matches"}</h2><p>Ranked by title, skills, experience, and location fit.</p></div><div className="shortlist-chip">{shortlisted.length} shortlisted</div></div>
@@ -503,7 +537,7 @@ function TalentSearch({ searching, searched, shortlisted, onSearch, onToggle, on
       {searching && <div className="candidate-grid">{[1,2,3,4].map((id) => <div className="candidate-card skeleton" key={id}><i /><i /><i /><i /></div>)}</div>}
       {searched && !searching && (
         <div className="candidate-grid">
-          {candidates.map((candidate) => (
+          {visibleCandidates.map((candidate) => (
             <article className="candidate-card" key={candidate.id}>
               <div className="candidate-source"><StatusBadge tone="demo">Demo data</StatusBadge><span>{candidate.source}</span></div>
               <div className="candidate-header">
@@ -520,6 +554,13 @@ function TalentSearch({ searching, searched, shortlisted, onSearch, onToggle, on
           ))}
         </div>
       )}
+      {searched && !searching && (
+        <nav className="pagination" aria-label="Candidate result pages">
+          <button className="secondary-button" disabled={page === 1} onClick={() => setPage((current) => current - 1)}>← Previous</button>
+          <span>Page {page} of {Math.ceil(candidates.length / pageSize)}</span>
+          <button className="secondary-button" disabled={page * pageSize >= candidates.length} onClick={() => setPage((current) => current + 1)}>Next →</button>
+        </nav>
+      )}
       {shortlisted.length > 0 && (
         <div className="selection-bar"><div className="avatar-stack">{candidates.filter((candidate) => shortlisted.includes(candidate.id)).slice(0, 2).map((candidate) => <Avatar key={candidate.id} initials={candidate.initials} tone={candidate.tone} />)}<span>{shortlisted.length}</span></div><p><strong>{shortlisted.length} candidate{shortlisted.length === 1 ? "" : "s"} selected</strong><small>Ready for a voice outreach campaign</small></p><button className="primary-button" onClick={onCampaign}>Create campaign →</button></div>
       )}
@@ -527,8 +568,16 @@ function TalentSearch({ searching, searched, shortlisted, onSearch, onToggle, on
   );
 }
 
-function Campaigns({ campaignState, onLaunch, onCandidate }: { campaignState: CampaignState; onLaunch: () => void; onCandidate: () => void }) {
+function Campaigns({ campaignState, shortlisted, onLaunch, onCandidate, role }: {
+  campaignState: CampaignState;
+  shortlisted: number[];
+  onLaunch: () => void;
+  onCandidate: (id: number) => void;
+  role: RoleDraft;
+}) {
   const isRunning = !["NOT_STARTED", "COMPLETED"].includes(campaignState);
+  const campaignCandidates = candidates.filter((candidate) => shortlisted.includes(candidate.id));
+  const candidateCount = campaignCandidates.length;
   const statusLabels: Record<CampaignState, string> = {
     NOT_STARTED: "Ready to launch",
     INITIATED: "Call initiated",
@@ -541,23 +590,24 @@ function Campaigns({ campaignState, onLaunch, onCandidate }: { campaignState: Ca
     <div className="campaign-layout">
       <section className="stack-lg">
         <article className="panel campaign-hero">
-          <div className="campaign-hero-top"><div><StatusBadge tone={campaignState === "COMPLETED" ? "green" : isRunning ? "amber" : "demo"}>{activeStatus}</StatusBadge><h2>CS Manager · August shortlist</h2><p>2 candidates · English · 4 screening questions</p></div><span className={`campaign-orb ${isRunning ? "calling" : campaignState.toLowerCase()}`}>◉</span></div>
+          <div className="campaign-hero-top"><div><StatusBadge tone={campaignState === "COMPLETED" ? "green" : isRunning ? "amber" : "demo"}>{activeStatus}</StatusBadge><h2>{role.title} · shortlist</h2><p>{candidateCount} candidate{candidateCount === 1 ? "" : "s"} · English · 4 screening questions</p></div><span className={`campaign-orb ${isRunning ? "calling" : campaignState.toLowerCase()}`}>◉</span></div>
           <div className="campaign-steps">
             {[
               ["1", "Review", "Candidates & questions"],
-              ["2", "Voice outreach", campaignState === "NOT_STARTED" ? "Waiting to launch" : campaignState === "COMPLETED" ? "2 of 2 complete" : activeStatus],
+              ["2", "Voice outreach", campaignState === "NOT_STARTED" ? "Waiting to launch" : campaignState === "COMPLETED" ? `${candidateCount} of ${candidateCount} complete` : activeStatus],
               ["3", "Human review", campaignState === "COMPLETED" ? "Ready now" : "After conversations"],
             ].map((step, index) => <div className={(campaignState !== "NOT_STARTED" && index < 2) || (campaignState === "COMPLETED") ? "done" : index === 0 ? "current" : ""} key={step[0]}><span>{(campaignState !== "NOT_STARTED" && index === 0) || (campaignState === "COMPLETED" && index < 3) ? "✓" : step[0]}</span><p><strong>{step[1]}</strong><small>{step[2]}</small></p></div>)}
           </div>
-          {campaignState === "NOT_STARTED" && <button className="primary-button large" onClick={onLaunch}>◉ Launch demo campaign</button>}
+          {campaignState === "NOT_STARTED" && <Button size="large" onClick={onLaunch} disabled={candidateCount === 0}>◉ {candidateCount === 0 ? "Shortlist candidates first" : "Launch demo campaign"}</Button>}
           {isRunning && <div className="calling-banner"><span className="voice-bars"><i /><i /><i /><i /></span><p><strong>{activeStatus}</strong><small>Lifecycle: NOT_STARTED → INITIATED → RINGING → IN_PROGRESS → COMPLETED</small></p></div>}
-          {campaignState === "COMPLETED" && <button className="primary-button large" onClick={onCandidate}>Review completed conversation →</button>}
+          {campaignState === "COMPLETED" && candidateCount > 0 && <Button size="large" onClick={() => onCandidate(campaignCandidates[0].id)}>Review completed conversation →</Button>}
         </article>
 
         <article className="panel candidate-call-list">
           <div className="panel-heading"><div><h2>Candidates</h2><p>Each call uses the same verified Hunar request contract.</p></div><StatusBadge tone="demo">No real calls</StatusBadge></div>
-          {[candidates[0], candidates[1]].map((candidate, index) => (
-            <button className="call-row" key={candidate.id} onClick={index === 0 && campaignState === "COMPLETED" ? onCandidate : undefined}>
+          {campaignCandidates.length === 0 && <div className="empty-state"><strong>No candidates selected</strong><p>Shortlist candidates in Talent search before launching outreach.</p></div>}
+          {campaignCandidates.map((candidate, index) => (
+            <button className="call-row" key={candidate.id} onClick={campaignState === "COMPLETED" ? () => onCandidate(candidate.id) : undefined}>
               <Avatar initials={candidate.initials} tone={candidate.tone} />
               <span className="call-person"><strong>{candidate.name}</strong><small>{candidate.role}</small></span>
               <span className="phone-mask">+91 ••••• ••{index ? "118" : "482"}</span>
@@ -590,6 +640,27 @@ function CandidateDetail({ candidateId, setNotice }: { candidateId: number; setN
     ? "I combine product usage, stakeholder engagement, support history, and business outcomes into a health score. For high-risk accounts, I agree a recovery plan with an executive sponsor and review it weekly."
     : `I monitor engagement, product usage, support history, and ${candidate.skills[2].toLowerCase()} signals, then agree a documented recovery plan with the customer team.`;
   const [decision, setDecision] = useState("Advance to interview");
+  const [decisionNote, setDecisionNote] = useState("Strong enterprise CS experience and clear ownership of outcomes.");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem(`recruitos-review-${candidate.id}`);
+      if (!stored) return;
+      try {
+        const review = JSON.parse(stored) as { decision?: string; note?: string };
+        setDecision(review.decision ?? "Advance to interview");
+        setDecisionNote(review.note ?? "");
+      } catch {
+        window.localStorage.removeItem(`recruitos-review-${candidate.id}`);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [candidate.id]);
+
+  function saveReview() {
+    window.localStorage.setItem(`recruitos-review-${candidate.id}`, JSON.stringify({ decision, note: decisionNote }));
+    setNotice(`Review saved: ${decision}`);
+  }
   return (
     <div className="candidate-detail-layout">
       <section className="stack-lg">
@@ -620,7 +691,7 @@ function CandidateDetail({ candidateId, setNotice }: { candidateId: number; setN
 
       <aside className="stack-lg">
         <article className="panel answers-card"><div className="panel-heading"><div><h2>Structured answers</h2><p>Mapped from Hunar result schema</p></div></div><div><span>Enterprise portfolio</span><p>{isAnanya ? "42 accounts · ₹18 Cr ARR" : `${candidate.role} · ${candidate.company}`}</p></div><div><span>Churn-risk method</span><p>{isAnanya ? "Health score + recovery plan" : `${candidate.skills[1]} + recovery plan`}</p></div><div><span>Hybrid work</span><p>{isAnanya ? "Comfortable, 3 days/week" : "Confirm during interview"}</p></div><div><span>Notice period</span><p>{isAnanya ? "45 days, negotiable" : "Not captured in search data"}</p></div></article>
-        <article className="panel review-card"><span className="eyebrow">Human decision</span><h2>Recruiter review</h2><p>Automated signals support this review; they do not make the hiring decision.</p><label>Decision<select value={decision} onChange={(event) => setDecision(event.target.value)}><option>Advance to interview</option><option>Hold for review</option><option>Do not proceed</option></select></label><label>Decision note<textarea placeholder="Add your reasoning…" defaultValue="Strong enterprise CS experience and clear ownership of outcomes." /></label><button className="primary-button full" onClick={() => setNotice(`Review saved: ${decision}`)}>Save human review</button></article>
+        <article className="panel review-card"><span className="eyebrow">Human decision</span><h2>Recruiter review</h2><p>Automated signals support this review; they do not make the hiring decision.</p><label>Decision<select value={decision} onChange={(event) => setDecision(event.target.value)}><option>Advance to interview</option><option>Hold for review</option><option>Do not proceed</option></select></label><label>Decision note<textarea placeholder="Add your reasoning…" value={decisionNote} onChange={(event) => setDecisionNote(event.target.value)} /></label><Button size="full" onClick={saveReview}>Save human review</Button></article>
         <article className="panel audit-card"><span>✓</span><div><strong>Transparent signal trail</strong><p>Provider result, application summary, and recruiter override remain separately attributed.</p></div></article>
       </aside>
     </div>
@@ -652,6 +723,12 @@ function AttendanceBlueprint({ layer, setLayer }: { layer: "capture" | "verify" 
       <section className="attendance-grid">
         <article className="panel principle-card"><span className="eyebrow">Identity & fraud controls</span><h2>Trust, but verify at the edge.</h2><div className="control-list"><div><span>01</span><p><strong>Something you know</strong>Employee PIN, never spoken to a supervisor.</p></div><div><span>02</span><p><strong>Somewhere you are</strong>Rotating code displayed only at the assigned site.</p></div><div><span>03</span><p><strong>Anomaly detection</strong>Impossible travel, duplicate punches, and repeated overrides.</p></div></div></article>
         <article className="panel exception-card"><div className="exception-head"><span>!</span><div><span className="eyebrow">Failure path</span><h2>Internet down at Site 43</h2></div></div><div className="timeline"><div><i>08:54</i><p><strong>Terminal stores encrypted events locally</strong>No employee queue or manual register.</p></div><div><i>09:10</i><p><strong>Supervisor receives IVR confirmation</strong>Only the exception count, not employee PINs.</p></div><div><i>11:32</i><p><strong>Connection returns; events sync</strong>Original timestamps are preserved.</p></div><div><i>17:00</i><p><strong>HR reviews one conflict</strong>Correction requires a reason and approval.</p></div></div></article>
+      </section>
+
+      <section className="governance-grid">
+        <article className="panel governance-card"><span className="eyebrow">Privacy & access</span><h2>Collect only what attendance needs.</h2><p>Encrypt badge and biometric templates, separate them from payroll data, use role-based access, and publish a correction and retention policy employees can understand.</p><ul><li>Least-privilege HR and supervisor roles</li><li>Configurable retention with deletion logs</li><li>Employee-visible correction workflow</li></ul></article>
+        <article className="panel governance-card"><span className="eyebrow">Operations at scale</span><h2>Design for 2,000 daily events.</h2><p>Site-health monitoring, local queues, idempotent sync, and a tested failover path keep 100 locations operating through network and device failures.</p><ul><li>Per-site uptime and queue alerts</li><li>Encrypted backups and quarterly recovery drill</li><li>Regional spares and supervisor runbook</li></ul></article>
+        <article className="panel governance-card"><span className="eyebrow">Human accountability</span><h2>Rules own the ledger; LLMs explain.</h2><p>Deterministic rules calculate attendance and payroll inputs. The LLM can summarize exceptions, but it cannot edit punches or approve corrections.</p><ul><li>Immutable original events</li><li>Reasoned, two-person overrides</li><li>Monthly bias and exception review</li></ul></article>
       </section>
 
       <section className="rollout panel"><div><span className="eyebrow">Practical rollout</span><h2>Prove reliability before scaling.</h2></div><div className="rollout-steps"><div><span>Pilot</span><strong>5 sites · 2 weeks</strong><p>Measure match rate, queue time, and failure recovery.</p></div><b>→</b><div><span>Regional</span><strong>25 sites · 4 weeks</strong><p>Train supervisors and calibrate anomaly rules.</p></div><b>→</b><div><span>Network</span><strong>100 sites</strong><p>Daily reconciliation, monthly controls review.</p></div></div></section>
