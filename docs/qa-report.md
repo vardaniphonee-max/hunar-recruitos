@@ -44,6 +44,7 @@ QA pass completed on 16 August 2026 against the assignment checklist. This repor
 - Campaign launch cancellation, launch, completion, refresh persistence, attendance tabs, and browser back/forward routing passed in the interactive browser run.
 - The final rebuilt bundle produced no browser console warnings or errors.
 - The production URL was tested without authentication after public access was enabled: it returned HTTP 200, the correct RecruitOS metadata and interface, and no sign-in gate.
+- The deployed server-only Hunar endpoint authenticated with `X-API-Key`, resolved active agent `[HunarHire] Candidate Screening` (FD35), and returned HTTP 200 without exposing the credential to the browser or repository.
 
 ## Deliberately not applicable
 
