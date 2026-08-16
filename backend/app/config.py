@@ -15,6 +15,7 @@ class Settings:
     public_api_url: str | None = os.getenv("PUBLIC_API_URL")
     apollo_api_key: str | None = os.getenv("APOLLO_API_KEY")
     apollo_base_url: str = os.getenv("APOLLO_BASE_URL", "https://api.apollo.io/api/v1")
+    recruiting_company_name: str = os.getenv("RECRUITING_COMPANY_NAME", "Hunar RecruitOS Demo")
     webhook_tolerance_seconds: int = 300
 
 
