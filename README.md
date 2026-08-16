@@ -4,7 +4,7 @@ Hunar RecruitOS is a focused recruiting workspace for the Hunar.ai take-home ass
 
 **Live demo:** https://hunar-recruitos-vardan.vardanredmi.chatgpt.site
 
-The deployed frontend is deliberately resilient: **Demo mode** exercises the complete reviewer journey without paid API credentials or calls to real people. Demo candidates, calls, transcripts, and results are visibly labelled.
+The deployed frontend is deliberately resilient: **Demo mode** exercises the complete reviewer journey without calling real people. A server-only health endpoint verifies the supplied Hunar credential and active candidate-screening agent at runtime; demo candidates, calls, transcripts, and results remain visibly labelled.
 
 ## Core journey
 
@@ -30,6 +30,7 @@ flowchart LR
 - SQLAlchemy data model; SQLite for zero-friction demo development and PostgreSQL through `DATABASE_URL`
 - `httpx` provider adapters for Hunar Voice and Apollo
 - Signed webhook verification using Hunar's documented HMAC-SHA256 scheme
+- Deployed server-only Hunar agent verification at `/api/hunar/status`; credentials never reach browser code
 - Focused pytest coverage around signatures and demo-provider safety
 
 ## Repository map
