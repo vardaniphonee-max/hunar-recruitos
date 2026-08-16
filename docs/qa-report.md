@@ -1,6 +1,6 @@
 # QA report
 
-QA pass completed on 14 August 2026 against the assignment checklist. This report separates verified behavior from work that requires live credentials or public access.
+QA pass completed on 16 August 2026 against the assignment checklist. This report separates verified behavior from work that requires live credentials.
 
 ## Automated checks passed
 
@@ -43,6 +43,7 @@ QA pass completed on 14 August 2026 against the assignment checklist. This repor
 - The built production bundle was exercised at 375 px, 768 px, and 1440 px widths. Mobile navigation opens/closes correctly and no tested page produced horizontal overflow.
 - Campaign launch cancellation, launch, completion, refresh persistence, attendance tabs, and browser back/forward routing passed in the interactive browser run.
 - The final rebuilt bundle produced no browser console warnings or errors.
+- The production URL was tested without authentication after public access was enabled: it returned HTTP 200, the correct RecruitOS metadata and interface, and no sign-in gate.
 
 ## Deliberately not applicable
 
@@ -55,7 +56,6 @@ QA pass completed on 14 August 2026 against the assignment checklist. This repor
 - A call to an explicitly authorized real phone number
 - Real lifecycle/webhook observation using the short-lived Hunar key
 - Apollo search using a credential with People API Search access
-- Public/incognito access test (the current deployment is owner-only)
 - Production backend environment values and a public HTTPS webhook URL
 - A complete Chrome plus one independent-browser matrix (the interactive pass used Chromium-based browser surfaces, not a full engine matrix)
 - Lighthouse/PageSpeed against the final public URL
