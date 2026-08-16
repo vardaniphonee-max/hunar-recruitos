@@ -25,7 +25,7 @@ flowchart LR
 
 ## Technology
 
-- Next.js-compatible React frontend written in TypeScript, styled with Tailwind CSS
+- Next.js-compatible React frontend written in TypeScript with Tailwind CSS and shadcn/ui primitives
 - Python FastAPI backend
 - SQLAlchemy data model; SQLite for zero-friction demo development and PostgreSQL through `DATABASE_URL`
 - `httpx` provider adapters for Hunar Voice and Apollo
@@ -89,6 +89,7 @@ Copy `.env.example` to `.env` and set only the credentials needed for live testi
 | `HUNAR_API_KEY` | Server-only Hunar credential and webhook-signing secret |
 | `HUNAR_AGENT_ID` | Active Hunar agent used for authorized live calls |
 | `APOLLO_API_KEY` | Server-only Apollo credential |
+| `RECRUITING_COMPANY_NAME` | Company name supplied to the Hunar screening agent |
 
 Never prefix these server-only variables with `NEXT_PUBLIC_`.
 
@@ -111,6 +112,8 @@ Apollo People API Search does not return email addresses or phone numbers. Those
 - Secrets are server-side environment values and excluded from Git.
 - Hunar callbacks are verified against the raw request body using `X-Hunar-Timestamp` and `X-Hunar-Signature` with a five-minute replay window.
 - Callback fingerprints make processing idempotent.
+- Lifecycle ordering prevents delayed callbacks from moving a completed call backward.
+- Campaign call records are committed before provider requests, so partial provider failures remain auditable.
 - Raw provider results are retained separately from normalized fields.
 - Provider-generated results, application recommendations, and recruiter decisions remain separately attributed.
 - Live calls are locked unless explicitly authorized.
