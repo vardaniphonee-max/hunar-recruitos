@@ -5,12 +5,13 @@ QA pass completed on 16 August 2026 against the assignment checklist. This repor
 ## Automated checks passed
 
 - Production frontend build
+- Standalone strict TypeScript check
 - Frontend lint and accessibility rules
 - Server-render smoke tests
 - No starter/loading placeholder metadata in production HTML
 - No Hunar or Apollo secret patterns in source or generated frontend files
 - Python source compilation
-- Eight backend tests covering demo-provider labelling, Hunar HMAC verification, timestamp replay rejection, modified-body rejection, retry-safe webhook idempotency, E.164 validation, and the complete HTTP demo workflow
+- Ten backend tests covering demo-provider labelling, Hunar HMAC verification, timestamp replay rejection, modified-body rejection, retry-safe webhook idempotency, out-of-order lifecycle protection, partial-provider failure tracking, E.164 validation, and the complete HTTP demo workflow
 - API integration coverage for health, role validation, repeated people search, duplicate prevention, shortlist updates, missing-candidate rejection, demo campaign creation, call polling, recruiter review, unsigned-webhook rejection, and canonical webhook retries
 - API health and database initialization from an empty SQLite database
 
@@ -22,11 +23,15 @@ QA pass completed on 16 August 2026 against the assignment checklist. This repor
 - Hunar requests are issued only by the backend adapter.
 - Webhooks verify the raw request body before JSON parsing and reject timestamps outside the five-minute replay window.
 - Idempotency uses canonical event JSON, so a retry with a fresh timestamp/signature cannot double-process an identical event.
-- Live campaigns pre-validate every selected candidate before any outbound request, preventing malformed or missing numbers from creating a partial campaign.
+- Live campaigns pre-validate every selected candidate before any outbound request. Call reservations are committed before provider requests, so partial provider failures stay tracked instead of disappearing in a rolled-back transaction.
+- The deployed Hunar status request has a 10-second timeout and never caches credential-validation responses.
 
 ## User-flow checks passed
 
 - Role title, location, and job description show readable inline validation for empty/short values and enforce maximum lengths.
+- Saved role title, location, experience, and description survive refresh and feed the talent and campaign screens.
+- The UI uses a real shadcn/ui Button primitive backed by Radix Slot, CVA, `clsx`, and `tailwind-merge`; `components.json` records the shadcn configuration.
+- Talent title, location, experience, and keyword filters are editable, and the four-result demo has working two-page pagination.
 - Talent search has a disabled/loading button and prevents double submission during the simulated request.
 - Shortlist singular/plural copy is correct and the avatar stack reflects the actual selected people.
 - Opening a talent result now preserves that exact candidate through candidate review and page refresh; review content no longer falls back to Ananya for every result.
@@ -34,14 +39,16 @@ QA pass completed on 16 August 2026 against the assignment checklist. This repor
 - Missing contact data is safe: demo candidates never expose or call a fake real number, and live mode requires an authorized E.164 number.
 - Voice simulation displays the documented sequence `NOT_STARTED → INITIATED → RINGING → IN_PROGRESS → COMPLETED`.
 - Campaign timers are cleared on unmount.
-- Shortlist and campaign state survive refresh through device-local demo persistence.
+- Shortlist, campaign, role, selected candidate, and per-candidate recruiter review state survive refresh through device-local demo persistence.
 - Hash routes restore Overview, Roles, Talent Search, Campaigns, Candidate Review, and Attendance Blueprint directly; browser back/forward updates the visible screen.
-- Candidate A and B retain separate call records keyed by `candidate_id`, `request_id`, and unique `provider_call_id`; out-of-order webhook updates query by provider call ID.
+- Candidate A and B retain separate call records keyed by `candidate_id`, `request_id`, and unique `provider_call_id`; late `RINGING` events cannot regress a `COMPLETED` call.
+- Campaign candidate counts, confirmation copy, lifecycle progress, and review links derive from the actual shortlist instead of two hard-coded people.
 - Backend search pagination accepts `page` and `per_page` and forwards both to Apollo.
 - Duplicate candidates are prevented by provider/external-ID and role/candidate uniqueness constraints.
 - The API polling fallback (`GET /api/calls/{id}`) refreshes and persists status/results when callbacks are delayed.
 - The built production bundle was exercised at 375 px, 768 px, and 1440 px widths. Mobile navigation opens/closes correctly and no tested page produced horizontal overflow.
 - Campaign launch cancellation, launch, completion, refresh persistence, attendance tabs, and browser back/forward routing passed in the interactive browser run.
+- Attendance governance, privacy, capacity, disaster-recovery, and human-accountability safeguards are visible in the deployed interface, not only in repository documentation.
 - The final rebuilt bundle produced no browser console warnings or errors.
 - The production URL was tested without authentication after public access was enabled: it returned HTTP 200, the correct RecruitOS metadata and interface, and no sign-in gate.
 - The deployed server-only Hunar endpoint authenticated with `X-API-Key`, resolved active agent `[HunarHire] Candidate Screening` (FD35), and returned HTTP 200 without exposing the credential to the browser or repository.
