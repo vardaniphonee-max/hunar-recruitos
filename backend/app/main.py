@@ -51,6 +51,27 @@ app.add_middleware(
 
 Db = Annotated[Session, Depends(get_db)]
 E164_PATTERN = re.compile(r"^\+[1-9]\d{7,14}$")
+LIFECYCLE_RANK = {
+    "NOT_STARTED": 0, "INITIATED": 1, "RINGING": 2, "IN_PROGRESS": 3,
+    "COMPLETED": 4, "FAILED": 4, "NO_ANSWER": 4, "CANCELLED": 4,
+}
+TERMINAL_CALL_STATUSES = {"COMPLETED", "FAILED", "NO_ANSWER", "CANCELLED"}
+
+
+def apply_call_payload(call: Call, payload: dict[str, Any]) -> None:
+    """Merge provider state without allowing late events to regress the lifecycle."""
+    current = (call.lifecycle_status or call.status or "NOT_STARTED").upper()
+    incoming = str(payload.get("lifecycle_status") or payload.get("status") or current).upper()
+    current_rank = LIFECYCLE_RANK.get(current, -1)
+    incoming_rank = LIFECYCLE_RANK.get(incoming, current_rank)
+    can_advance = current not in TERMINAL_CALL_STATUSES and incoming_rank >= current_rank
+    if can_advance or incoming == current:
+        call.lifecycle_status = incoming
+        call.status = str(payload.get("status") or incoming).upper()
+    call.duration_seconds = payload.get("duration_seconds", call.duration_seconds)
+    call.recording_url = payload.get("recording_url", call.recording_url)
+    call.result = payload.get("result", call.result)
+    call.raw_provider_payload = payload
 
 
 def serialize_role(role: Role) -> dict[str, Any]:
@@ -180,7 +201,7 @@ async def create_campaign(data: CampaignCreate, db: Db) -> dict[str, Any]:
                 f"Live outreach requires an authorized E.164 phone number for: {names}",
             )
 
-    campaign = Campaign(role_id=role.id, name=data.name, status="IN_PROGRESS", is_demo=is_demo)
+    campaign = Campaign(role_id=role.id, name=data.name, status="QUEUED", is_demo=is_demo)
     db.add(campaign)
     db.flush()
     provider = DemoVoiceProvider() if is_demo else HunarVoiceProvider(settings.hunar_api_key or "", settings.hunar_base_url)
@@ -194,27 +215,65 @@ async def create_campaign(data: CampaignCreate, db: Db) -> dict[str, Any]:
             "call_summary_callback_url": url,
         }
 
-    created_calls = []
+    queued_calls: list[tuple[Candidate, Call]] = []
     for candidate in candidates:
         request_id = f"recruitos-{campaign.id}-{candidate.id}-{uuid4().hex[:8]}"
-        response = await provider.create_call(
-            agent_id=settings.hunar_agent_id or "demo-agent",
-            callee_name=candidate.name,
-            mobile_number=candidate.phone or "+910000000000",
-            custom_data={"job_role": role.title, "location": role.location},
-            request_id=request_id,
-            callback_config=callback_config,
-        )
         call = Call(
             campaign_id=campaign.id, candidate_id=candidate.id,
-            provider_call_id=response["id"], request_id=response["request_id"],
-            status=response["status"], lifecycle_status=response.get("lifecycle_status", response["status"]),
-            raw_provider_payload=response, is_demo=is_demo,
+            request_id=request_id, status="NOT_STARTED", lifecycle_status="NOT_STARTED",
+            is_demo=is_demo,
         )
         db.add(call)
-        created_calls.append(response)
+        queued_calls.append((candidate, call))
     db.commit()
-    return {"id": campaign.id, "status": campaign.status, "is_demo": is_demo, "calls": created_calls}
+
+    question_text = "\n".join(
+        f"{index}. {question.prompt}" for index, question in enumerate(
+            sorted(role.questions, key=lambda item: item.position), start=1
+        )
+    )
+    custom_data = {
+        "job_role": role.title,
+        "job_title": role.title,
+        "location": role.location,
+        "job_location": role.location,
+        "required_skills": ", ".join(role.skills),
+        "experience_range": f"{role.experience_min}-{role.experience_max} years",
+        "interview_questions": question_text,
+        "job_summary": role.description,
+        "company_name": settings.recruiting_company_name,
+    }
+    created_calls = []
+    failed_calls = 0
+    for candidate, call in queued_calls:
+        try:
+            response = await provider.create_call(
+                agent_id=settings.hunar_agent_id or "demo-agent",
+                callee_name=candidate.name,
+                mobile_number=candidate.phone or "+910000000000",
+                custom_data=custom_data,
+                request_id=call.request_id,
+                callback_config=callback_config,
+            )
+            call.provider_call_id = response["id"]
+            call.request_id = response.get("request_id", call.request_id)
+            apply_call_payload(call, response)
+            created_calls.append(response)
+        except Exception as exc:
+            failed_calls += 1
+            call.status = "FAILED"
+            call.lifecycle_status = "FAILED"
+            call.raw_provider_payload = {"error": type(exc).__name__, "tracked": True}
+        db.commit()
+
+    campaign.status = "FAILED" if not created_calls else "PARTIAL" if failed_calls else "IN_PROGRESS"
+    db.commit()
+    if not created_calls:
+        raise HTTPException(502, "Voice provider rejected every queued call; failures were recorded")
+    return {
+        "id": campaign.id, "status": campaign.status, "is_demo": is_demo,
+        "calls": created_calls, "failed_call_count": failed_calls,
+    }
 
 
 @app.get("/api/calls/{call_id}")
@@ -225,12 +284,7 @@ async def get_call(call_id: int, db: Db) -> dict[str, Any]:
     provider = DemoVoiceProvider() if call.is_demo else HunarVoiceProvider(settings.hunar_api_key or "", settings.hunar_base_url)
     if call.provider_call_id:
         payload = await provider.get_call(call.provider_call_id)
-        call.status = payload.get("status", call.status)
-        call.lifecycle_status = payload.get("lifecycle_status", call.lifecycle_status)
-        call.duration_seconds = payload.get("duration_seconds")
-        call.recording_url = payload.get("recording_url")
-        call.result = payload.get("result")
-        call.raw_provider_payload = payload
+        apply_call_payload(call, payload)
         for key, value in (call.result or {}).items():
             answer = db.scalar(select(StructuredAnswer).where(
                 StructuredAnswer.call_id == call.id, StructuredAnswer.key == key
@@ -280,12 +334,7 @@ async def hunar_webhook(
     db.add(event)
     call = db.scalar(select(Call).where(Call.provider_call_id == payload["call_id"]))
     if call:
-        call.status = payload.get("status", call.status)
-        call.lifecycle_status = payload.get("lifecycle_status", call.lifecycle_status)
-        call.duration_seconds = payload.get("duration_seconds", call.duration_seconds)
-        call.recording_url = payload.get("recording_url", call.recording_url)
-        call.result = payload.get("result", call.result)
-        call.raw_provider_payload = payload
+        apply_call_payload(call, payload)
     try:
         db.commit()
     except IntegrityError:
