@@ -18,6 +18,7 @@ export async function GET() {
     const response = await fetch(`${baseUrl}/agents/${agentId}/`, {
       headers: { "X-API-Key": apiKey, Accept: "application/json" },
       cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
