@@ -52,6 +52,8 @@ QA pass completed on 16 August 2026 against the assignment checklist. This repor
 - The final rebuilt bundle produced no browser console warnings or errors.
 - The production URL was tested without authentication after public access was enabled: it returned HTTP 200, the correct RecruitOS metadata and interface, and no sign-in gate.
 - The deployed server-only Hunar endpoint authenticated with `X-API-Key`, resolved active agent `[HunarHire] Candidate Screening` (FD35), and returned HTTP 200 without exposing the credential to the browser or repository.
+- With explicit ownership and consent from the test-number owner, one live Hunar call completed on 16 August 2026 with retries disabled. Observed provider states included `RINGING`, `IN_PROGRESS`, and `COMPLETED`; duration was 106 seconds, and Hunar returned a summary plus structured answer, interest, experience, location, notice-period, compensation, and recommendation fields.
+- The live-call endpoint required a 64-character one-time bearer token, validated E.164 and explicit consent, returned sanitized fields only, and was disabled after the test. Its token was removed, a new environment revision was deployed, and an unauthenticated production request then returned HTTP 404.
 
 ## Deliberately not applicable
 
@@ -61,14 +63,13 @@ QA pass completed on 16 August 2026 against the assignment checklist. This repor
 
 ## Requires final live authorization
 
-- A call to an explicitly authorized real phone number
-- Real lifecycle/webhook observation using the short-lived Hunar key
+- Delivery of live results through the separately deployable FastAPI webhook into the public dashboard (the authorized test used secure polling and did not persist personal answers in the public demo)
 - Apollo search using a credential with People API Search access
 - Production backend environment values and a public HTTPS webhook URL
 - A complete Chrome plus one independent-browser matrix (the interactive pass used Chromium-based browser surfaces, not a full engine matrix)
 - Lighthouse/PageSpeed against the final public URL
 
-These items must not be marked complete until actually run. No real person has been called during QA.
+These remaining items must not be marked complete until actually run. One explicitly consented test call was completed; no candidate or non-consenting person was called.
 
 ## Remaining product limitations
 
